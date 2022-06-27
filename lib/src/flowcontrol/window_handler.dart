@@ -145,6 +145,8 @@ class IncomingWindowHandler {
     }
   }
 
+  int windowUpdateSize = 0;
+
   /// Tell the peer we received [numberOfBytes] bytes. It will increase it's
   /// sending window then.
   ///
@@ -154,9 +156,14 @@ class IncomingWindowHandler {
   void dataProcessed(int numberOfBytes) {
     _localWindow.modify(numberOfBytes);
 
-    // TODO: This can be optimized by delaying the window update to
-    // send one update with a bigger difference than multiple small update
-    // frames.
-    _frameWriter.writeWindowUpdate(numberOfBytes, streamId: _streamId);
+    // Ensure we only send window updates of 10KB or more for better efficiency
+    const kMinWindowUpdateSize = 1024 * 10;
+    windowUpdateSize += numberOfBytes;
+    final sendUpdate = windowUpdateSize >= kMinWindowUpdateSize &&
+        windowUpdateSize - numberOfBytes < kMinWindowUpdateSize;
+    if (sendUpdate) {
+      _frameWriter.writeWindowUpdate(windowUpdateSize, streamId: _streamId);
+      windowUpdateSize = 0;
+    }
   }
 }
